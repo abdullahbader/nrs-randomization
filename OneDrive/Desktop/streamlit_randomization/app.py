@@ -1,6 +1,5 @@
 import os
 import random
-import json
 from datetime import datetime
 from io import BytesIO
 
@@ -19,8 +18,6 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
 
 
 RECIPIENT_EMAILS = ["abdallah.b.b96@gmail.com"]
@@ -430,94 +427,6 @@ def build_pdf_report(snap, selected_sections, student_results):
     return buffer.getvalue()
 
 
-# ---------- Google Sheets Append ----------
-def append_to_google_sheet(snap, selected_sections, student_results):
-    if "google_sheets" not in st.secrets:
-        raise RuntimeError(
-            "لم يتم إعداد بيانات Google Sheets. "
-            "يجب إضافة قسم [google_sheets] في secrets.toml."
-        )
-
-    cfg = st.secrets["google_sheets"]
-    spreadsheet_id = cfg["spreadsheet_id"]
-    credentials_json_str = cfg["credentials_json"]
-
-    try:
-        credentials_dict = json.loads(credentials_json_str)
-    except json.JSONDecodeError:
-        raise RuntimeError(
-            "بيانات اعتماد Google Sheets غير صحيحة. "
-            "تأكد من أن credentials_json يحتوي على JSON صحيح."
-        )
-
-    credentials = Credentials.from_service_account_info(
-        credentials_dict,
-        scopes=["https://www.googleapis.com/auth/spreadsheets"]
-    )
-
-    service = build("sheets", "v4", credentials=credentials)
-
-    # Create headers if they don't exist
-    headers = [
-        "Date", "School ID", "Grade Range",
-        "Grade 1 Sections", "Grade 2 Sections", "Grade 3 Sections",
-        "Grade 4 Sections", "Grade 5 Sections", "Grade 6 Sections",
-        "Selected Section 1", "Section 1 Total Students", "Section 1 Selected Students",
-        "Selected Section 2", "Section 2 Total Students", "Section 2 Selected Students",
-        "Selected Section 3", "Section 3 Total Students", "Section 3 Selected Students",
-    ]
-
-    # Check if sheet is empty and add headers
-    try:
-        existing = service.spreadsheets().values().get(
-            spreadsheetId=spreadsheet_id,
-            range="Sheet1!A1:1"
-        ).execute()
-        if not existing.get("values"):
-            service.spreadsheets().values().update(
-                spreadsheetId=spreadsheet_id,
-                range="Sheet1!A1",
-                valueInputOption="USER_ENTERED",
-                body={"values": [headers]}
-            ).execute()
-    except:
-        pass
-
-    # Build row data
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    grade_range = snap.get("grade_range", "—")
-    school_id = snap.get("school_id", "—")
-
-    sections_per_grade = snap.get("sections_per_grade", {})
-
-    # Grade sections count (for grades 1-6)
-    grade_sections = []
-    for grade in range(1, 7):
-        count = sections_per_grade.get(grade, 0)
-        grade_sections.append(count if count > 0 else "")
-
-    # Selected sections (up to 3)
-    selected_sections_data = []
-    for i in range(3):
-        if i < len(selected_sections):
-            grade, label = selected_sections[i]
-            selected_sections_data.append(f"Grade {grade}-Section {label}")
-            total_students = student_results[i]["Total"] if i < len(student_results) else ""
-            selected_students = ", ".join(f"#{s}" for s in student_results[i]["Students"]) if i < len(student_results) else ""
-            selected_sections_data.extend([total_students, selected_students])
-        else:
-            selected_sections_data.extend(["", "", ""])
-
-    row_values = [
-        [timestamp, school_id, grade_range] + grade_sections + selected_sections_data
-    ]
-
-    service.spreadsheets().values().append(
-        spreadsheetId=spreadsheet_id,
-        range="Sheet1",
-        valueInputOption="USER_ENTERED",
-        body={"values": row_values}
-    ).execute()
 
 
 # ---------- 5. Results + PDF + email ----------
@@ -553,7 +462,7 @@ if st.session_state.student_results:
     st.markdown('<h3 class="section-title">التقرير النهائي (PDF)</h3>', unsafe_allow_html=True)
     st.caption("تقرير منسق باللغة الإنجليزية يحتوي على جميع التفاصيل، جاهز للمشاركة.")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns([3, 1])
     with col1:
         st.download_button(
             "تحميل التقرير PDF",
@@ -564,30 +473,4 @@ if st.session_state.student_results:
             use_container_width=True,
         )
     with col2:
-        if st.button(
-            "إضافة البيانات إلى Google Sheet",
-            type="primary",
-            use_container_width=True,
-            key="send_sheet_btn",
-        ):
-            try:
-                append_to_google_sheet(snap, st.session_state.selected_sections, st.session_state.student_results)
-                st.session_state.email_status = (
-                    "success",
-                    "تم إضافة البيانات بنجاح إلى Google Sheet",
-                )
-            except Exception as e:
-                st.session_state.email_status = ("error", f"فشلت الإضافة: {e}")
-    with col3:
         st.button("البدء من جديد", on_click=_reset, use_container_width=True)
-
-    if st.session_state.email_status:
-        kind, msg_text = st.session_state.email_status
-        if kind == "success":
-            st.success(msg_text)
-        else:
-            st.error(msg_text)
-            st.info(
-                "تأكد من إعداد بيانات Google Sheets "
-                "في ملف `.streamlit/secrets.toml` محلياً، أو في إعدادات Streamlit Cloud عند النشر."
-            )
