@@ -24,12 +24,12 @@ RECIPIENT_EMAILS = ["abdallah.b.b96@gmail.com"]
 SECTIONS_TO_PICK = 3
 STUDENTS_TO_PICK = 3
 
-# Section labels in Arabic Abjad order (أبجد هوز حطي كلمن) — 14 letters max.
-ARABIC_SECTION_LETTERS = [
-    "أ", "ب", "ج", "د", "ه", "و", "ز",
-    "ح", "ط", "ي", "ك", "ل", "م", "ن",
+# Section labels in English (A-N) — 14 letters max.
+SECTION_LETTERS = [
+    "A", "B", "C", "D", "E", "F", "G",
+    "H", "I", "J", "K", "L", "M", "N",
 ]
-MAX_SECTIONS_PER_GRADE = len(ARABIC_SECTION_LETTERS)
+MAX_SECTIONS_PER_GRADE = len(SECTION_LETTERS)
 
 
 # ---------- PDF font registration (must support Arabic glyphs) ----------
@@ -196,14 +196,14 @@ for i, grade in enumerate(grades):
         )
         sections_per_grade[grade] = int(n)
         if int(n) > 0:
-            st.caption(f"الشُعب: {'، '.join(ARABIC_SECTION_LETTERS[:int(n)])}")
+            st.caption(f"الشُعب: {'، '.join(SECTION_LETTERS[:int(n)])}")
         else:
             st.caption("لا توجد شُعب لهذا الصف")
 
 all_sections = [
     (grade, label)
     for grade, n in sections_per_grade.items()
-    for label in ARABIC_SECTION_LETTERS[:n]
+    for label in SECTION_LETTERS[:n]
 ]
 total_sections = len(all_sections)
 st.info(f"إجمالي عدد الشُعب: **{total_sections}**")
@@ -220,7 +220,7 @@ if run_sections:
         picked = random.sample(all_sections, SECTIONS_TO_PICK)
     else:
         picked = all_sections[:]
-    picked.sort(key=lambda gs: (gs[0], ARABIC_SECTION_LETTERS.index(gs[1])))
+    picked.sort(key=lambda gs: (gs[0], SECTION_LETTERS.index(gs[1])))
     st.session_state.selected_sections = picked
     st.session_state.student_results = None
     st.session_state.email_status = None
@@ -371,7 +371,7 @@ def build_pdf_report(snap, selected_sections, student_results):
     sec_per_grade_data = [["Grade", "Number of Sections", "Section Labels"]]
     sections_per_grade_snap = snap.get("sections_per_grade", {})
     for grade, n in sections_per_grade_snap.items():
-        labels = "، ".join(ARABIC_SECTION_LETTERS[:n]) if n > 0 else "—"
+        labels = "، ".join(SECTION_LETTERS[:n]) if n > 0 else "—"
         sec_per_grade_data.append([f"Grade {grade}", str(n), labels])
     total = sum(sections_per_grade_snap.values())
     sec_per_grade_data.append(["Total pool", str(total), ""])
